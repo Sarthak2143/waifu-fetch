@@ -5,22 +5,18 @@
 #include <fstream>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <vector>
+
 using json = nlohmann::json;
 
 class ImageRenderer {
 private:
-  const std::string ASCII_CHARS_SIMPLE = " .:-=+*#%@";
-  const std::string ASCII_CHARS_DETAILED =
-      " .'`^\",:;Il!i><~+_-?][}{1)(|\\/"
-      "tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
-  const std::string ASCII_CHARS_BLOCKS = " ░▒▓█";
+  static const std::string ASCII_CHARS_SIMPLE;
+  static const std::string ASCII_CHARS_DETAILED;
+  static const std::string ASCII_CHARS_BLOCKS;
 
 public:
-  enum CharStyle {
-    SIMPLE,
-    DETAILED,
-    BLOCKS,
-  };
+  enum CharStyle { SIMPLE, DETAILED, BLOCKS };
 
   struct RenderOptions {
     int width = 120;
@@ -56,8 +52,12 @@ public:
     return true;
   }
 
+  void renderMatToAscii(cv::Mat &img, const RenderOptions &options) {
+    // renderIma
+  }
+
 private:
-  std::string getCharSet(CharStyle style) {
+  const std::string &getCharSet(CharStyle style) const {
     switch (style) {
     case SIMPLE:
       return ASCII_CHARS_SIMPLE;
@@ -76,23 +76,26 @@ private:
       img.convertTo(img, -1, options.contrast, options.brightness);
     }
 
-    int width = options.width;
-    int height = options.height;
+    int target_width = options.width;
+    int target_height = options.height;
 
     if (options.aspectRatio) {
       double aspectRatio = (double)img.cols / img.rows;
-      aspectRatio *= 0.5;
+      aspectRatio *= 2.0;
 
-      if (aspectRatio > (double)width / height) {
-        height = width / aspectRatio;
+      if (aspectRatio > (double)target_width / target_height) {
+        target_height = static_cast<int>(target_width / aspectRatio);
       } else {
-        width = height * aspectRatio;
+        target_width = static_cast<int>(target_height * aspectRatio);
       }
+
+      target_width = std::max(target_width, 20);
+      target_height = std::max(target_height, 20);
     }
     // resizing img
-    cv::resize(img, img, cv::Size(width, height));
+    cv::resize(img, img, cv::Size(target_width, target_height));
 
-    std::string charSet = getCharSet(options.style);
+    const std::string &charSet = getCharSet(options.style);
     if (options.colorSupport) {
       renderColorAscii(img, charSet);
     } else {
@@ -110,7 +113,7 @@ private:
         int idx = pixel * (charSet.length() - 1) / 255;
         std::cout << charSet[idx];
       }
-      std::cout << std::endl;
+      std::cout << '\n';
     }
   }
 
@@ -126,51 +129,65 @@ private:
         int brightness = gray.at<uchar>(i, j);
         int idx = brightness * (charSet.length() - 1) / 255;
 
+        // \033[38;2;R;G;Bm : set foreground color
+        // \033[0m          : reset attributes
         printf("\033[38;2;%d;%d;%dm%c\033[0m", r, g, b, charSet[idx]);
       }
-      std::cout << std::endl;
+      std::cout << '\n';
     }
   }
 };
 
-std::string userAgent =
-    "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0";
-std::string acceptHeader =
-    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+const std::string ImageRenderer::ASCII_CHARS_SIMPLE = " .:-=+*#%@";
+const std::string ImageRenderer::ASCII_CHARS_DETAILED =
+    " .'`^\",:;Il!i><~+_-?][}{1)(|\\/"
+    "tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+const std::string ImageRenderer::ASCII_CHARS_BLOCKS = " ░▒▓█";
 
 bool downloadImg(const std::string &imgUrl, const std::string &fileName);
 void displayImg(const std::string &fileName);
 void urlToAscii(const std::string &imgUrl);
 
 int main(int argc, char **argv) {
-  std::cout << "OpenCV version: " << CV_VERSION << std::endl;
+  std::ios_base::sync_with_stdio(false);
+  std::cin.tie(NULL);
+
+  std::cout << "OpenCV version: " << CV_VERSION << '\n';
   std::string tags[] = {"maid",          "waifu",         "marin-kitagawa",
                         "mori-calliope", "raiden-shogun", "oppai",
                         "selfies",       "uniform",       "kamisato-ayaka"};
   if (argc != 2) {
+    std::cerr << "Usage: " << argv[0] << " <tag>\n";
     return 1;
   }
   std::string tag = std::string(argv[1]);
   bool found = false;
-  for (std::string t : tags) {
+  for (const std::string &t : tags) {
     if (t == tag) {
       found = true;
       break;
     }
   }
   if (!found) {
-    std::cout << "Not a valid tag" << std::endl;
+    std::cerr << "Error: Not a valid tag. Valid tags are:\n";
+    for (const std::string &t : tags) {
+      std::cerr << "- " << t << '\n';
+    }
     return 1;
   }
 
   std::string url = "https://api.waifu.im/search";
   std::string tempFile = "temp.jpg";
-  auto response = cpr::Get(
-      cpr::Url{url}, cpr::Parameters{{"included_tags", tag}},
-      cpr::Header{{"User-Agent", userAgent}, {"accept", acceptHeader}});
+  auto response =
+      cpr::Get(cpr::Url{url}, cpr::Parameters{{"included_tags", tag}});
 
   if (response.status_code == 200) {
     json data = json::parse(response.text);
+    if (!data.contains("images") || !data["images"].is_array() ||
+        data["images"].empty()) {
+      std::cerr << "Error: API response doesn't contain valid image data.\n";
+      return 1;
+    }
     std::string imgUrl = data["images"][0]["url"];
 
     if (downloadImg(imgUrl, "temp.jpg")) {
@@ -180,12 +197,14 @@ int main(int argc, char **argv) {
     }
     remove(tempFile.c_str());
     // urlToAscii(imgUrl);
-    ImageRenderer renderer;
 
+    ImageRenderer renderer;
     ImageRenderer::RenderOptions opts;
-    opts.width = 100;
-    opts.height = 30;
-    opts.style = ImageRenderer::DETAILED;
+    opts.width = 130;
+    opts.height = 70;
+    opts.style = ImageRenderer::SIMPLE;
+    opts.aspectRatio = true;
+    opts.brightness = 10.0;
     opts.colorSupport = true;
 
     renderer.urlToAscii(imgUrl, opts);
@@ -195,9 +214,7 @@ int main(int argc, char **argv) {
 
 bool downloadImg(const std::string &imgUrl, const std::string &fileName) {
   std::ofstream of(fileName, std::ios::binary);
-  auto response = cpr::Download(
-      of, cpr::Url{imgUrl},
-      cpr::Header{{"User-Agent", userAgent}, {"accept", acceptHeader}});
+  auto response = cpr::Download(of, cpr::Url{imgUrl});
   if (response.status_code == 200) {
     return true;
   }
