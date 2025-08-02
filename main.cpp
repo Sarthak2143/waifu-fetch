@@ -52,10 +52,6 @@ public:
     return true;
   }
 
-  void renderMatToAscii(cv::Mat &img, const RenderOptions &options) {
-    // renderIma
-  }
-
 private:
   const std::string &getCharSet(CharStyle style) const {
     switch (style) {
@@ -79,6 +75,11 @@ private:
     int target_width = options.width;
     int target_height = options.height;
 
+    std::cout << "Original image size: " << img.cols << "x" << img.rows
+              << std::endl;
+    std::cout << "Target size: " << target_width << "x" << target_height
+              << std::endl;
+
     if (options.aspectRatio) {
       double aspectRatio = (double)img.cols / img.rows;
       aspectRatio *= 2.0;
@@ -92,8 +93,13 @@ private:
       target_width = std::max(target_width, 20);
       target_height = std::max(target_height, 20);
     }
+
+    std::cout << "Adjusted size: " << target_width << "x" << target_height
+              << std::endl;
     // resizing img
     cv::resize(img, img, cv::Size(target_width, target_height));
+    std::cout << "Final image size: " << img.cols << "x" << img.rows
+              << std::endl;
 
     const std::string &charSet = getCharSet(options.style);
     if (options.colorSupport) {
@@ -107,13 +113,18 @@ private:
     cv::Mat gray;
     cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
 
+    std::cout << "Rendering " << gray.cols << "x" << gray.rows << " characters"
+              << std::endl;
+
+    std::string line;
     for (int i = 0; i < gray.rows; i++) {
+      line = "";
       for (int j = 0; j < gray.cols; j++) {
         int pixel = gray.at<uchar>(i, j);
         int idx = pixel * (charSet.length() - 1) / 255;
-        std::cout << charSet[idx];
+        line += charSet[idx];
       }
-      std::cout << '\n';
+      std::cout << line << std::endl;
     }
   }
 
@@ -200,12 +211,12 @@ int main(int argc, char **argv) {
 
     ImageRenderer renderer;
     ImageRenderer::RenderOptions opts;
-    opts.width = 130;
-    opts.height = 70;
+    opts.width = 40;
+    opts.height = 25;
     opts.style = ImageRenderer::SIMPLE;
-    opts.aspectRatio = true;
-    opts.brightness = 10.0;
-    opts.colorSupport = true;
+    opts.aspectRatio = false;
+    // opts.brightness = 10.0;
+    opts.colorSupport = false;
 
     renderer.urlToAscii(imgUrl, opts);
   }
