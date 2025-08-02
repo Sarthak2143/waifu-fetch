@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(waifu-fetch)
 
-set(set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON))
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -21,5 +21,5 @@ target_link_libraries(waifu-fetch PRIVATE
 
 target_include_directories(
   waifu-fetch PRIVATE
-  $(OpenCV_INCLUDE_DIRS)
+  ${OpenCV_INCLUDE_DIRS}
 )

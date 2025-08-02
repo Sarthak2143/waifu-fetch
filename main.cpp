@@ -5,8 +5,133 @@
 #include <fstream>
 #include <iostream>
 #include <opencv2/opencv.hpp>
-#include <vector>
 using json = nlohmann::json;
+
+class ImageRenderer {
+private:
+  const std::string ASCII_CHARS_SIMPLE = " .:-=+*#%@";
+  const std::string ASCII_CHARS_DETAILED =
+      " .'`^\",:;Il!i><~+_-?][}{1)(|\\/"
+      "tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+  const std::string ASCII_CHARS_BLOCKS = " ░▒▓█";
+
+public:
+  enum CharStyle {
+    SIMPLE,
+    DETAILED,
+    BLOCKS,
+  };
+
+  struct RenderOptions {
+    int width = 120;
+    int height = 40;
+    CharStyle style = SIMPLE;
+    bool colorSupport = false;
+    bool aspectRatio = true;
+    double contrast = 1.0;
+    double brightness = 0.0;
+  };
+
+  bool urlToAscii(const std::string &imgUrl) {
+    return urlToAscii(imgUrl, RenderOptions{});
+  }
+
+  bool urlToAscii(const std::string &imgUrl, const RenderOptions &options) {
+    auto response = cpr::Get(cpr::Url{imgUrl});
+    if (response.status_code != 200) {
+      std::cerr << "Failed to download image. Status: " << response.status_code
+                << std::endl;
+      return false;
+    }
+    // decoding image
+    std::vector<uchar> imgData(response.text.begin(), response.text.end());
+    cv::Mat img = cv::imdecode(imgData, cv::IMREAD_COLOR);
+
+    if (img.empty()) {
+      std::cerr << "Failed to decode image" << std::endl;
+      return false;
+    }
+
+    renderImage(img, options);
+    return true;
+  }
+
+private:
+  std::string getCharSet(CharStyle style) {
+    switch (style) {
+    case SIMPLE:
+      return ASCII_CHARS_SIMPLE;
+    case DETAILED:
+      return ASCII_CHARS_DETAILED;
+    case BLOCKS:
+      return ASCII_CHARS_BLOCKS;
+    default:
+      return ASCII_CHARS_SIMPLE;
+    }
+  }
+
+  void renderImage(cv::Mat &img, const RenderOptions &options) {
+    // adjusting color and brightness
+    if (options.contrast != 1.0 || options.brightness != 0.0) {
+      img.convertTo(img, -1, options.contrast, options.brightness);
+    }
+
+    int width = options.width;
+    int height = options.height;
+
+    if (options.aspectRatio) {
+      double aspectRatio = (double)img.cols / img.rows;
+      aspectRatio *= 0.5;
+
+      if (aspectRatio > (double)width / height) {
+        height = width / aspectRatio;
+      } else {
+        width = height * aspectRatio;
+      }
+    }
+    // resizing img
+    cv::resize(img, img, cv::Size(width, height));
+
+    std::string charSet = getCharSet(options.style);
+    if (options.colorSupport) {
+      renderColorAscii(img, charSet);
+    } else {
+      renderGrayScaleAscii(img, charSet);
+    }
+  }
+
+  void renderGrayScaleAscii(const cv::Mat &img, const std::string &charSet) {
+    cv::Mat gray;
+    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+
+    for (int i = 0; i < gray.rows; i++) {
+      for (int j = 0; j < gray.cols; j++) {
+        int pixel = gray.at<uchar>(i, j);
+        int idx = pixel * (charSet.length() - 1) / 255;
+        std::cout << charSet[idx];
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  void renderColorAscii(const cv::Mat &img, const std::string &charSet) {
+    cv::Mat gray;
+    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+
+    for (int i = 0; i < gray.rows; i++) {
+      for (int j = 0; j < gray.cols; j++) {
+        cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
+        int b = pixel[0], g = pixel[1], r = pixel[2];
+
+        int brightness = gray.at<uchar>(i, j);
+        int idx = brightness * (charSet.length() - 1) / 255;
+
+        printf("\033[38;2;%d;%d;%dm%c\033[0m", r, g, b, charSet[idx]);
+      }
+      std::cout << std::endl;
+    }
+  }
+};
 
 std::string userAgent =
     "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0";
@@ -37,11 +162,7 @@ int main(int argc, char **argv) {
     std::cout << "Not a valid tag" << std::endl;
     return 1;
   }
-  // std::string url =
-  //     "https://api.waifu.im/"
-  //     "search?included_tags=raiden-shogun&included_tags=maid&height=>=2000'";
-  // std::string url = "http://www.httpbin.org/headers";
-  // std::string url = "https://api.waifu.im/tags";
+
   std::string url = "https://api.waifu.im/search";
   std::string tempFile = "temp.jpg";
   auto response = cpr::Get(
@@ -58,7 +179,16 @@ int main(int argc, char **argv) {
       std::cout << "Failed to download image." << std::endl;
     }
     remove(tempFile.c_str());
-    urlToAscii(imgUrl);
+    // urlToAscii(imgUrl);
+    ImageRenderer renderer;
+
+    ImageRenderer::RenderOptions opts;
+    opts.width = 100;
+    opts.height = 30;
+    opts.style = ImageRenderer::DETAILED;
+    opts.colorSupport = true;
+
+    renderer.urlToAscii(imgUrl, opts);
   }
   return 0;
 }
