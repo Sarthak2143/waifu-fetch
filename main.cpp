@@ -145,22 +145,6 @@ private:
     }
   }
 
-  // void renderColorAscii(const cv::Mat &img, const std::string &charSet) {
-  //   for (int i = 0; i < img.rows; i++) {
-  //     std::string line = "";
-  //     for (int j = 0; j < img.cols; j++) {
-  //       cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
-  //       int b = pixel[0], g = pixel[1], r = pixel[2];
-  //
-  //       // Use background color with space (more stable)
-  //       std::ostringstream colorStr;
-  //       colorStr << "\033[48;2;" << r << ";" << g << ";" << b << "m \033[0m";
-  //       line += colorStr.str();
-  //     }
-  //     std::cout << line << std::endl;
-  //   }
-  // }
-
   void renderColorAscii(const cv::Mat &img, const std::string &charSet) {
     cv::Mat gray;
     cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
