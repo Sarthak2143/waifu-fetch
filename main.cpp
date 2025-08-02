@@ -1,10 +1,14 @@
 #include "json.hpp"
+#include <clocale>
 #include <cpr/cpr.h>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <locale>
 #include <opencv2/opencv.hpp>
+#include <sstream>
+#include <string>
 #include <vector>
 
 using json = nlohmann::json;
@@ -66,6 +70,20 @@ private:
     }
   }
 
+  std::vector<std::string> splitCharSet(const std::string &charSet) {
+    std::vector<std::string> chars;
+    if (charSet == getCharSet(BLOCKS)) {
+      chars = {" ", "░", "▒", "▓", "█"};
+    } else if (charSet == getCharSet(SIMPLE)) {
+      chars = {" ", ".", ":", "-", "=", "+", "*", "#", "%", "@"};
+    } else {
+      for (char c : charSet) {
+        chars.push_back(std::string(1, c));
+      }
+    }
+    return chars;
+  }
+
   void renderImage(cv::Mat &img, const RenderOptions &options) {
     // adjusting color and brightness
     if (options.contrast != 1.0 || options.brightness != 0.0) {
@@ -113,39 +131,71 @@ private:
     cv::Mat gray;
     cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
 
-    std::cout << "Rendering " << gray.cols << "x" << gray.rows << " characters"
-              << std::endl;
+    auto chars = splitCharSet(charSet);
 
     std::string line;
     for (int i = 0; i < gray.rows; i++) {
       line = "";
       for (int j = 0; j < gray.cols; j++) {
         int pixel = gray.at<uchar>(i, j);
-        int idx = pixel * (charSet.length() - 1) / 255;
-        line += charSet[idx];
+        int idx = pixel * (chars.size() - 1) / 255;
+        line += chars[idx];
       }
       std::cout << line << std::endl;
     }
   }
 
+  // void renderColorAscii(const cv::Mat &img, const std::string &charSet) {
+  //   for (int i = 0; i < img.rows; i++) {
+  //     std::string line = "";
+  //     for (int j = 0; j < img.cols; j++) {
+  //       cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
+  //       int b = pixel[0], g = pixel[1], r = pixel[2];
+  //
+  //       // Use background color with space (more stable)
+  //       std::ostringstream colorStr;
+  //       colorStr << "\033[48;2;" << r << ";" << g << ";" << b << "m \033[0m";
+  //       line += colorStr.str();
+  //     }
+  //     std::cout << line << std::endl;
+  //   }
+  // }
+
   void renderColorAscii(const cv::Mat &img, const std::string &charSet) {
     cv::Mat gray;
     cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
 
-    for (int i = 0; i < gray.rows; i++) {
-      for (int j = 0; j < gray.cols; j++) {
+    auto chars = splitCharSet(charSet);
+
+    for (int i = 0; i < img.rows; i++) {
+      for (int j = 0; j < img.cols; j++) {
         cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
         int b = pixel[0], g = pixel[1], r = pixel[2];
 
-        int brightness = gray.at<uchar>(i, j);
-        int idx = brightness * (charSet.length() - 1) / 255;
+        r = std::max(0, std::min(255, r));
+        g = std::max(0, std::min(255, g));
+        b = std::max(0, std::min(255, b));
 
-        // \033[38;2;R;G;Bm : set foreground color
-        // \033[0m          : reset attributes
-        printf("\033[38;2;%d;%d;%dm%c\033[0m", r, g, b, charSet[idx]);
+        int brightness = gray.at<uchar>(i, j);
+
+        int maxIdx = (int)chars.size() - 1;
+        int calcIdx = brightness * maxIdx / 255;
+        int idx = std::max(0, std::min(maxIdx, calcIdx));
+
+        if (idx < chars.size() && !chars[idx].empty()) {
+          printf("\x1b[48;2;%d;%d;%dm%s\x1b[0m", r, g, b, chars[idx].c_str());
+        } else {
+          printf("\x1b[48;2;%d;%d;%dm \x1b[0m", r, g, b);
+        }
       }
-      std::cout << '\n';
+      printf("\n");
+
+      // flushing periodically to prevent buffering issues
+      if (i % 5 == 0) {
+        fflush(stdout);
+      }
     }
+    fflush(stdout);
   }
 };
 
@@ -153,13 +203,17 @@ const std::string ImageRenderer::ASCII_CHARS_SIMPLE = " .:-=+*#%@";
 const std::string ImageRenderer::ASCII_CHARS_DETAILED =
     " .'`^\",:;Il!i><~+_-?][}{1)(|\\/"
     "tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
-const std::string ImageRenderer::ASCII_CHARS_BLOCKS = " ░▒▓█";
+const std::string ImageRenderer::ASCII_CHARS_BLOCKS =
+    " \u2591\u2592\u2593\u2588";
 
 bool downloadImg(const std::string &imgUrl, const std::string &fileName);
 void displayImg(const std::string &fileName);
 void urlToAscii(const std::string &imgUrl);
 
 int main(int argc, char **argv) {
+  std::setlocale(LC_ALL, "en_US.UTF-8");
+  std::locale::global(std::locale("en_US.UTF-8"));
+
   std::ios_base::sync_with_stdio(false);
   std::cin.tie(NULL);
 
@@ -211,12 +265,12 @@ int main(int argc, char **argv) {
 
     ImageRenderer renderer;
     ImageRenderer::RenderOptions opts;
-    opts.width = 40;
-    opts.height = 25;
-    opts.style = ImageRenderer::SIMPLE;
+    opts.width = 80;
+    opts.height = 55;
+    opts.style = ImageRenderer::BLOCKS;
     opts.aspectRatio = false;
     // opts.brightness = 10.0;
-    opts.colorSupport = false;
+    opts.colorSupport = true;
 
     renderer.urlToAscii(imgUrl, opts);
   }
