@@ -98,8 +98,6 @@ void ImageRenderer::renderImage(cv::Mat &img,
   const std::string &charSet = getCharSet(options.style);
   if (options.colorSupport) {
     renderColorAscii(img, charSet);
-    std::cout << "\n\n";
-    betterRenderColorAscii(img, charSet);
   } else {
     renderGrayScaleAscii(img, charSet);
   }
@@ -130,6 +128,19 @@ void ImageRenderer::renderColorAscii(const cv::Mat &img,
   cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
   auto chars = splitCharSet(charSet);
 
+  struct Color {
+    int r, g, b;
+  };
+  std::vector<Color> palette = {
+      {255, 218, 185}, // Peach (skin tone)
+      {255, 192, 203}, // Pink (hair)
+      {0, 128, 255},   // Sky Blue (eyes)
+      {0, 0, 0},       // Black (outlines)
+      {255, 215, 0},   // Gold (accents)
+      {255, 99, 71}    // Tomato (bold color)
+  };
+  bool usePalette = false; // Add to RenderOptions to toggle
+
   for (int i = 0; i < img.rows; i++) {
     for (int j = 0; j < img.cols; j++) {
       cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
@@ -140,10 +151,26 @@ void ImageRenderer::renderColorAscii(const cv::Mat &img,
       b = std::max(0, std::min(255, b));
 
       int brightness = gray.at<uchar>(i, j);
-
       int maxIdx = (int)chars.size() - 1;
       int calcIdx = brightness * maxIdx / 255;
       int idx = std::max(0, std::min(maxIdx, calcIdx));
+
+      if (usePalette) {
+        float minDist = std::numeric_limits<float>::max();
+        Color closestColor = palette[0];
+        for (const auto &color : palette) {
+          float dist =
+              std::sqrt(std::pow(r - color.r, 2) + std::pow(g - color.g, 2) +
+                        std::pow(b - color.b, 2));
+          if (dist < minDist) {
+            minDist = dist;
+            closestColor = color;
+          }
+        }
+        r = closestColor.r;
+        g = closestColor.g;
+        b = closestColor.b;
+      }
 
       if (idx < chars.size() && !chars[idx].empty()) {
         printf("\x1b[48;2;%d;%d;%dm%s\x1b[0m", r, g, b, chars[idx].c_str());
@@ -154,105 +181,6 @@ void ImageRenderer::renderColorAscii(const cv::Mat &img,
     printf("\n");
 
     // flushing periodically to prevent buffering issues
-    if (i % 5 == 0) {
-      fflush(stdout);
-    }
-  }
-  fflush(stdout);
-}
-
-void ImageRenderer::betterRenderColorAscii(const cv::Mat &img,
-                                           const std::string &charSet) {
-  cv::Mat gray, edges;
-  cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-  cv::Laplacian(gray, edges, CV_16S, 3);
-  cv::convertScaleAbs(edges, edges);
-  cv::normalize(edges, edges, 0, 255, cv::NORM_MINMAX, CV_8U);
-
-  struct Color {
-    int r, g, b;
-  };
-  std::vector<Color> palette = {
-      {255, 0, 0},     // Red
-      {0, 255, 0},     // Green
-      {0, 0, 255},     // Blue
-      {255, 255, 0},   // Yellow
-      {0, 255, 255},   // Cyan
-      {255, 0, 255},   // Magenta
-      {255, 255, 255}, // White
-      {0, 0, 0}        // Black
-  };
-
-  auto chars = splitCharSet(charSet);
-  int maxIdx = static_cast<int>(chars.size()) - 1;
-
-  // error diffusion arrays for floyd steinberg dithering
-  // TODO: read more:
-  // https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering
-  std::vector<std::vector<cv::Vec3f>> errors(
-      img.rows, std::vector<cv::Vec3f>(img.cols, cv::Vec3f(0, 0, 0)));
-
-  for (int i = 0; i < img.rows; i++) {
-    for (int j = 0; j < img.cols; j++) {
-      cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
-      cv::Vec3f pixel_f(pixel[0], pixel[1], pixel[2]);
-      pixel_f += errors[i][j];
-
-      // quantize to nearest palette color
-      int r = std::max(0, std::min(255, static_cast<int>(pixel_f[2])));
-      int g = std::max(0, std::min(255, static_cast<int>(pixel_f[1])));
-      int b = std::max(0, std::min(255, static_cast<int>(pixel_f[0])));
-      float minDist = std::numeric_limits<float>::max();
-      Color closestColor = palette[0];
-
-      for (const auto &color : palette) {
-        float dist =
-            std::sqrt(std::pow(r - color.r, 2) + std::pow(g - color.g, 2) +
-                      std::pow(b - color.b, 2));
-        if (dist < minDist) {
-          minDist = dist;
-          closestColor = color;
-        }
-      }
-
-      // applying dithering
-      // distribute quantization error
-      cv::Vec3f quant_error(pixel_f[0] - closestColor.b,
-                            pixel_f[1] - closestColor.g,
-                            pixel_f[2] - closestColor.r);
-      if (j + 1 < img.cols) {
-        errors[i][j + 1] += quant_error * 7.0f / 16.0f;
-      }
-      if (i + 1 < img.rows) {
-        if (j > 0) {
-          errors[i + 1][j - 1] += quant_error * 3.0f / 16.0f;
-        }
-        errors[i + 1][j] += quant_error * 5.0f / 16.0f;
-        if (j + 1 < img.cols) {
-          errors[i + 1][j + 1] += quant_error * 1.0f / 16.0f;
-        }
-      }
-
-      // fixing brightness with (gamme = 2.2) correction
-      int brightness = gray.at<uchar>(i, j);
-      int edge_val = edges.at<uchar>(i, j);
-      float adjusted_brightness =
-          std::pow((brightness + edge_val * 0.5f) / 255.0f, 2.2f) * 255.0f;
-      int idx =
-          std::max(0, std::min(maxIdx, static_cast<int>(adjusted_brightness *
-                                                        maxIdx / 255.0f)));
-
-      if (idx < chars.size() && !chars[idx].empty()) {
-        printf("\x1b[48;2;%d;%d;%dm%s\x1b[0m", closestColor.r, closestColor.g,
-               closestColor.b, chars[idx].c_str());
-      } else {
-        printf("\x1b[48;2;%d;%d;%dm \x1b[0m", closestColor.r, closestColor.g,
-               closestColor.b);
-      }
-    }
-    printf("\n");
-
-    // flushing periodically
     if (i % 5 == 0) {
       fflush(stdout);
     }

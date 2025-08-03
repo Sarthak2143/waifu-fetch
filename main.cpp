@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
     if (asciiMode) {
       ImageRenderer renderer;
       ImageRenderer::RenderOptions opts;
-      opts.style = ImageRenderer::BLOCKS;
+      opts.style = ImageRenderer::DETAILED;
       opts.colorSupport = true;
 
       renderer.urlToAscii(imgUrl, opts);
@@ -109,5 +109,4 @@ bool downloadImg(const std::string &imgUrl, const std::string &fileName) {
 
 void displayImg(const std::string &fileName) {
   system(("chafa " + fileName).c_str());
-  // system(("ascii-image-converter " + fileName).c_str());
 }
