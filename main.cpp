@@ -109,5 +109,5 @@ bool downloadImg(const std::string &imgUrl, const std::string &fileName) {
 
 void displayImg(const std::string &fileName) {
   system(("chafa " + fileName).c_str());
-  system(("ascii-image-converter " + fileName).c_str());
+  // system(("ascii-image-converter " + fileName).c_str());
 }

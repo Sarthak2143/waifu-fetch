@@ -36,6 +36,7 @@ private:
   void renderImage(cv::Mat &img, const RenderOptions &options);
   void renderGrayScaleAscii(const cv::Mat &img, const std::string &charSet);
   void renderColorAscii(const cv::Mat &img, const std::string &charSet);
+  void betterRenderColorAscii(const cv::Mat &img, const std::string &charSet);
 };
 
 #endif // IMAGE_RENDERER_HPP
