@@ -104,7 +104,8 @@ void ImageRenderer::renderImage(cv::Mat &img,
 }
 
 void ImageRenderer::renderGrayScaleAscii(const cv::Mat &img,
-                                         const std::string &charSet) {
+                                         const std::string &charSet,
+                                         const bool &usePalette) {
   cv::Mat gray;
   cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
 
@@ -123,7 +124,8 @@ void ImageRenderer::renderGrayScaleAscii(const cv::Mat &img,
 }
 
 void ImageRenderer::renderColorAscii(const cv::Mat &img,
-                                     const std::string &charSet) {
+                                     const std::string &charSet,
+                                     const bool &usePalette) {
   cv::Mat gray;
   cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
   auto chars = splitCharSet(charSet);
@@ -139,7 +141,6 @@ void ImageRenderer::renderColorAscii(const cv::Mat &img,
       {255, 215, 0},   // Gold (accents)
       {255, 99, 71}    // Tomato (bold color)
   };
-  bool usePalette = false; // Add to RenderOptions to toggle
 
   for (int i = 0; i < img.rows; i++) {
     for (int j = 0; j < img.cols; j++) {

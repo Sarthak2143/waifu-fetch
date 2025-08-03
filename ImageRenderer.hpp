@@ -21,6 +21,7 @@ public:
     bool aspectRatio = true;
     double contrast = 1.0;
     double brightness = 0.0;
+    bool usePallete = false;
   };
 
   bool urlToAscii(const std::string &imgUrl);
@@ -34,8 +35,10 @@ private:
   const std::string &getCharSet(CharStyle style) const;
   std::vector<std::string> splitCharSet(const std::string &charSet);
   void renderImage(cv::Mat &img, const RenderOptions &options);
-  void renderGrayScaleAscii(const cv::Mat &img, const std::string &charSet);
-  void renderColorAscii(const cv::Mat &img, const std::string &charSet);
+  void renderGrayScaleAscii(const cv::Mat &img, const std::string &charSet,
+                            const bool &usePallete);
+  void renderColorAscii(const cv::Mat &img, const std::string &charSet,
+                        const bool &usePallete);
 };
 
 #endif // IMAGE_RENDERER_HPP

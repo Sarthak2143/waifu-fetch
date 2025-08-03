@@ -20,7 +20,6 @@ int main(int argc, char **argv) {
   std::ios_base::sync_with_stdio(false);
   std::cin.tie(NULL);
 
-  std::cout << "OpenCV version: " << CV_VERSION << '\n';
   std::string tags[] = {"maid",          "waifu",         "marin-kitagawa",
                         "mori-calliope", "raiden-shogun", "oppai",
                         "selfies",       "uniform",       "kamisato-ayaka"};
