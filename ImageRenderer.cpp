@@ -97,9 +97,9 @@ void ImageRenderer::renderImage(cv::Mat &img,
 
   const std::string &charSet = getCharSet(options.style);
   if (options.colorSupport) {
-    renderColorAscii(img, charSet);
+    renderColorAscii(img, charSet, options.usePallete);
   } else {
-    renderGrayScaleAscii(img, charSet);
+    renderGrayScaleAscii(img, charSet, options.usePallete);
   }
 }
 
